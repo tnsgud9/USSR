@@ -12,11 +12,53 @@ namespace USSR.Core
     {
         static readonly string? appVersion = Utility.GetVersion();
         const string ASSET_CLASS_DB = "classdata.tpk";
-
+        static bool isCli;
+        static string splashIndexArg;
+        static int splashIndex = 0;
+        static int mode = 2;
         static void Main(string[] args)
         {
             Console.Title = $"Unity Splash Screen Remover v{appVersion}";
             AnsiConsole.Background = Color.Grey11;
+
+            isCli = args.Length != 0;
+
+            string modeArg = args.ElementAtOrDefault(0);
+            string filePathArg = args.ElementAtOrDefault(1);
+            splashIndexArg = args.ElementAtOrDefault(2);
+
+            string filePath = string.IsNullOrEmpty(filePathArg) ? "" : Path.IsPathRooted(filePathArg) ? filePathArg : Path.GetFullPath(filePathArg);
+            if (isCli)
+            {
+                if (!File.Exists(filePath))
+                {
+                    Console.WriteLine("File not found");
+                    return;
+                }
+
+                if (modeArg == "splash" || modeArg == "-s")
+                {
+                    mode = 0;
+                    if (int.TryParse(splashIndexArg, out int i))
+                    {
+                        splashIndex = i;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid index");
+                        return;
+                    }
+                }
+                else if (modeArg == "watermark" || modeArg == "-w")
+                {
+                    mode = 1;
+                }
+                else
+                {
+                    Console.WriteLine("Wrong remove mode. Choose one of: splash, watermark");
+                    return;
+                }
+            }
 
             while (true)
             {
@@ -25,13 +67,16 @@ namespace USSR.Core
 
                 string? ussrExec = Path.GetDirectoryName(AppContext.BaseDirectory);
                 string[] menuList = { "Remove Unity Splash Screen", "Remove Watermark", "Exit" };
-                int choiceIndex = GetPromptChoice(menuList);
+                int choiceIndex = isCli ? mode : GetPromptChoice(menuList);
                 if (choiceIndex == 2)
                     return;
-                string? selectedFile = OpenFilePicker();
+                string? selectedFile = isCli ? filePath : OpenFilePicker();
 
                 if (selectedFile == null)
+                {
+                    if (isCli) return;
                     continue; // Prompt for action again
+                }
 
                 AnsiConsole.MarkupLineInterpolated(
                     $"( INFO ) Selected file: [green]{selectedFile}[/]"
@@ -56,13 +101,17 @@ namespace USSR.Core
                 {
                     AnsiConsole.MarkupLine("[red]( ERR! )[/] Unknown/Unsupported file type!");
                     Console.WriteLine();
+                    if (isCli) return;
                     continue; // Prompt for action again
                 }
 
                 AssetsManager assetsManager = new();
                 string? tpkFile = Path.Combine(ussrExec ?? string.Empty, ASSET_CLASS_DB);
                 if (!LoadClassPackage(assetsManager, tpkFile))
+                {
+                    if (isCli) return;
                     continue; // Prompt for action again
+                }
 
                 List<string> temporaryFiles = new();
                 string inspectedFile = selectedFile;
@@ -151,6 +200,8 @@ namespace USSR.Core
                         AnsiConsole.MarkupLineInterpolated(
                             $"[red]( ERR! )[/] Error when loading asset class types database! {ex.Message}"
                         );
+
+                        if (isCli) return;
                         continue; // Prompt for action again
                     }
                 }
@@ -230,6 +281,7 @@ namespace USSR.Core
                     }
                 }
 
+                if (isCli) return;
                 AnsiConsole.WriteLine();
                 AnsiConsole.MarkupLine("Press any key to continue...");
                 Console.ReadKey();
@@ -687,7 +739,7 @@ namespace USSR.Core
                 AnsiConsole.Markup("Which splash screen you want to remove? ");
 
                 InputLogoIndex:
-                string? logoIndex = Console.ReadLine();
+                string? logoIndex = isCli ? splashIndexArg : Console.ReadLine();
                 if (
                     !int.TryParse(
                         logoIndex,
@@ -702,6 +754,7 @@ namespace USSR.Core
                     AnsiConsole.MarkupLineInterpolated(
                         $"[red]( ERR! )[/] There's no splash screen at order [red]{logoIndex}[/]! Try again."
                     );
+                    if (isCli) return null;
                     goto InputLogoIndex;
                 }
 
@@ -728,6 +781,7 @@ namespace USSR.Core
                 AnsiConsole.MarkupLineInterpolated(
                     $"[red]( ERR! )[/] Error when removing the splash screen! {ex.Message}"
                 );
+                if (isCli) return null;
                 return null;
             }
         }
@@ -780,6 +834,7 @@ namespace USSR.Core
                 AnsiConsole.MarkupLineInterpolated(
                     $"[red]( ERR! )[/] Error when removing the watermark! {ex.Message}"
                 );
+                if (isCli) return null;
                 return assetFile;
             }
         }
